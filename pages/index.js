@@ -23,6 +23,7 @@ const DATA_URL =
 function Index() {
   const [data, setData] = React.useState([]);
   const [constants, setConstants] = React.useState({
+    predictedDays: 14,
     deathRate: 0.02,
     incubationTime: 20,
     spreadRate: 1.35,
@@ -269,7 +270,11 @@ function addCumulPred(data) {
 function massageData(data, constants) {
   return filterOldDates(
     addCumulPred(
-      addPredictionDates(addCumul(addMissingDates(data)), 14, constants)
+      addPredictionDates(
+        addCumul(addMissingDates(data)),
+        constants.predictedDays,
+        constants
+      )
     )
   );
 }
