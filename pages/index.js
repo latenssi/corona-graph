@@ -1,4 +1,5 @@
 import React from "react";
+import dateformat from "dateformat";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -12,17 +13,26 @@ import {
   Legend
 } from "recharts";
 
-import dateformat from "dateformat";
-
 import styles from "./Index.module.css";
+
+const DATA_URL =
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:8000/FI/grouped.json"
+    : "https://corona-adapter.herokuapp.com/FI/grouped.json";
 
 function Index() {
   const [data, setData] = React.useState([]);
+  const [constants, setConstants] = React.useState({
+    deathRate: 0.02,
+    incubationTime: 20,
+    spreadRate: 1.35,
+    measuresEffectiveness: 0.6
+  });
 
   React.useEffect(() => {
-    fetch("https://corona-adapter.herokuapp.com/FI/grouped.json")
+    fetch(DATA_URL)
       .then(r => r.json())
-      .then(d => setData(massageData(d)));
+      .then(d => setData(massageData(d, constants)));
   }, []);
 
   return (
@@ -42,17 +52,18 @@ function Index() {
             />
             <Tooltip isAnimationActive={false} />
             <Legend verticalAlign="top" />
+
             <Area
               type="monotone"
               dataKey="confirmed_cum"
               fill="#b6b0ff"
-              stroke="#6e61ff"
+              stroke="#3f2eff"
               name="Kumul. varmistuneet"
             />
             <Area
               type="monotone"
               dataKey="recovered_cum"
-              fill="#7dff8e"
+              fill="#baffc3"
               stroke="#00c721"
               name="Kumul. parantuneet"
             />
@@ -60,8 +71,15 @@ function Index() {
               type="monotone"
               dataKey="deaths_cum"
               fill="#ff9c9c"
-              stroke="#ff6161"
+              stroke="#d40300"
               name="Kumul. kuolleet"
+            />
+
+            <Bar
+              dataKey="recovered"
+              barSize={20}
+              fill="#00c721"
+              name="Parantuneet"
             />
             <Bar
               dataKey="confirmed"
@@ -69,18 +87,61 @@ function Index() {
               fill="#3f2eff"
               name="Varmistuneet"
             />
-            <Bar
-              dataKey="recovered"
-              barSize={20}
-              fill="#00c721"
-              name="Parantuneet"
-            />
             <Bar dataKey="deaths" barSize={20} fill="#d40300" name="Kuolleet" />
+
             <Line
               type="monotone"
               dataKey="active"
               stroke="#ff8400"
               name="Aktiivisia"
+            />
+
+            <Area
+              type="monotone"
+              dataKey="confirmed_cum_pred"
+              fill="#b6b0ff"
+              stroke="#3f2eff"
+              name="Kumul. varmistuneet (ennuste)"
+            />
+            <Area
+              type="monotone"
+              dataKey="recovered_cum_pred"
+              fill="#baffc3"
+              stroke="#00c721"
+              name="Kumul. parantuneet (ennuste)"
+            />
+            <Area
+              type="monotone"
+              dataKey="deaths_cum_pred"
+              fill="#ff9c9c"
+              stroke="#d40300"
+              name="Kumul. kuolleet (ennuste)"
+            />
+
+            <Bar
+              dataKey="recovered_pred"
+              barSize={20}
+              fill="#00c721"
+              name="Parantuneet (ennuste)"
+            />
+            <Bar
+              dataKey="confirmed_pred"
+              barSize={20}
+              fill="#3f2eff"
+              name="Varmistuneet (ennuste)"
+            />
+            <Bar
+              dataKey="deaths_pred"
+              barSize={20}
+              fill="#d40300"
+              name="Kuolleet (ennuste)"
+            />
+
+            <Line
+              type="monotone"
+              dataKey="active_pred"
+              stroke="#ff8400"
+              name="Aktiivisia (ennuste)"
             />
           </ComposedChart>
         </ResponsiveContainer>
@@ -111,19 +172,49 @@ function filterOldDates(data) {
   return data.filter(d => d.date > "2020-02-22");
 }
 
-function addMissingDates(data) {
-  // Assume data is in order
-  const firstDate = data[0].date;
-  const lastDate = data[data.length - 1].date;
-  const allDates = getDates(new Date(firstDate), new Date(lastDate)).map(d =>
-    dateformat(d, "yyyy-mm-dd")
-  );
+function addDatesBetween(origData, start, end, constants) {
+  const data = origData.slice();
+  const allDates = getDates(start, end).map(d => dateformat(d, "yyyy-mm-dd"));
   allDates.forEach((ad, i) => {
     if (data[i] && data[i].date !== ad) {
+      // Adding empty data (in between)
       data.splice(i, 0, { date: ad, confirmed: 0, recovered: 0, deaths: 0 });
+    } else if (!data[i]) {
+      // Predicting (in future)
+      const actualSpreadrate =
+        constants.spreadRate -
+        (constants.spreadRate - 1) * constants.measuresEffectiveness;
+
+      const incubatedCases =
+        data[i - constants.incubationTime].confirmed ||
+        data[i - constants.incubationTime].confirmed_pred;
+
+      data.push({
+        date: ad,
+        confirmed_pred: Math.round(
+          (data[i - 1].confirmed || data[i - 1].confirmed_pred) *
+            actualSpreadrate
+        ),
+        recovered_pred: Math.round(incubatedCases * (1 - constants.deathRate)),
+        deaths_pred: Math.round(incubatedCases * constants.deathRate)
+      });
     }
   });
   return data;
+}
+
+function addMissingDates(data) {
+  // Assume data is in order
+  const firstDate = new Date(data[0].date);
+  const lastDate = new Date(data[data.length - 1].date);
+  return addDatesBetween(data, firstDate, lastDate);
+}
+
+function addPredictionDates(data, days = 0, constants) {
+  const firstDate = new Date(data[0].date);
+  const lastDate = new Date(data[data.length - 1].date);
+  const future = lastDate.addDays(days);
+  return addDatesBetween(data, firstDate, future, constants);
 }
 
 function addCumul(data) {
@@ -147,6 +238,38 @@ function addCumul(data) {
   });
 }
 
-function massageData(data) {
-  return filterOldDates(addCumul(addMissingDates(data)));
+function addCumulPred(data) {
+  let confirmed_cum_pred = 0;
+  let recovered_cum_pred = 0;
+  let deaths_cum_pred = 0;
+  let active_pred = 0;
+  return data.map(({ date, ...datums }) => {
+    if (!("confirmed_pred" in datums)) {
+      confirmed_cum_pred = datums["confirmed_cum"];
+      recovered_cum_pred = datums["recovered_cum"];
+      deaths_cum_pred = datums["deaths_cum"];
+      active_pred = datums["active_cum"];
+      return { date, ...datums };
+    }
+    confirmed_cum_pred += datums["confirmed_pred"] || 0;
+    recovered_cum_pred += datums["recovered_pred"] || 0;
+    deaths_cum_pred += datums["deaths_pred"] || 0;
+    active_pred = confirmed_cum_pred - recovered_cum_pred - deaths_cum_pred;
+    return {
+      date,
+      ...datums,
+      confirmed_cum_pred,
+      recovered_cum_pred,
+      deaths_cum_pred,
+      active_pred
+    };
+  });
+}
+
+function massageData(data, constants) {
+  return filterOldDates(
+    addCumulPred(
+      addPredictionDates(addCumul(addMissingDates(data)), 14, constants)
+    )
+  );
 }
