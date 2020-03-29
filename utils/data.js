@@ -26,19 +26,14 @@ function predict(history, constants) {
     (constants.spreadRate - 1) * constants.measuresEffectiveness;
 
   const incubatedCases =
-    history[history.length - constants.incubationTime].confirmed ||
-    history[history.length - constants.incubationTime].confirmed_pred ||
-    0;
+    history[history.length - constants.incubationTime].confirmed || 0;
 
-  const lastConfirmed =
-    history[history.length - 1].confirmed ||
-    history[history.length - 1].confirmed_pred ||
-    0;
+  const lastConfirmed = history[history.length - 1].confirmed || 0;
 
   return {
-    confirmed_pred: Math.round(lastConfirmed * actualSpreadrate),
-    recovered_pred: Math.round(incubatedCases * (1 - constants.deathRate)),
-    deaths_pred: Math.round(incubatedCases * constants.deathRate)
+    confirmed: Math.round(lastConfirmed * actualSpreadrate),
+    recovered: Math.round(incubatedCases * (1 - constants.deathRate)),
+    deaths: Math.round(incubatedCases * constants.deathRate)
   };
 }
 
@@ -94,38 +89,25 @@ function addCumul(data) {
   });
 }
 
-function addCumulPred(data) {
-  let confirmed_cum_pred = 0;
-  let recovered_cum_pred = 0;
-  let deaths_cum_pred = 0;
-  let active_pred = 0;
-  return data.map(({ date, ...datums }) => {
-    if (!("confirmed_pred" in datums)) {
-      confirmed_cum_pred = datums["confirmed_cum"];
-      recovered_cum_pred = datums["recovered_cum"];
-      deaths_cum_pred = datums["deaths_cum"];
-      active_pred = datums["active_cum"];
-      return { date, ...datums };
-    }
-    confirmed_cum_pred += datums["confirmed_pred"] || 0;
-    recovered_cum_pred += datums["recovered_pred"] || 0;
-    deaths_cum_pred += datums["deaths_pred"] || 0;
-    active_pred = confirmed_cum_pred - recovered_cum_pred - deaths_cum_pred;
-    return {
-      date,
-      ...datums,
-      confirmed_cum_pred,
-      recovered_cum_pred,
-      deaths_cum_pred,
-      active_pred
-    };
-  });
+function addHosptilazed(data, constants) {
+  return data.map(d => ({
+    ...d,
+    hospitalized: Math.round(d.active * constants.hospitalizationRate),
+    icu: Math.round(d.active * constants.intensiveCareRate)
+  }));
 }
 
 function massageData(data, constants) {
-  return filterOldDates(
-    addCumulPred(addPredictionDates(addCumul(addMissingDates(data)), constants))
+  return addHosptilazed(
+    filterOldDates(
+      addCumul(addPredictionDates(addMissingDates(data), constants))
+    ),
+    constants
   );
 }
 
-export { massageData };
+function getPredictionBoundary(data) {
+  return dateformat(new Date(data[data.length - 1].date), "yyyy-mm-dd");
+}
+
+export { massageData, getPredictionBoundary };
