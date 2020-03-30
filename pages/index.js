@@ -67,7 +67,7 @@ function Index() {
               stroke="#3f2eff"
               name="Kumul. tapauksia"
             />
-            <Bar dataKey="confirmed" fill="#3f2eff" name="Uusi tapauksia" />
+            <Bar dataKey="confirmed" fill="#3f2eff" name="Uusia tapauksia" />
           </Chart>
           <Chart data={data} predictionBoundary={predictionBoundary}>
             <ReferenceLine y={600} stroke="#ff8080" strokeWidth={4}>
