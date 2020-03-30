@@ -99,13 +99,11 @@ function addPredictedOther(data) {
       confirmed: 0
     };
 
-    const recovered = d.prediction
-      ? Math.round(incubatedCases * (1 - activeModel.deathRate))
-      : d.recovered;
-
     const deaths = d.prediction
       ? Math.round(incubatedCases * activeModel.deathRate)
       : d.deaths;
+
+    const recovered = d.prediction ? incubatedCases - deaths : d.recovered;
 
     return {
       ...d,
