@@ -1,10 +1,11 @@
 .main {
   height: 100%;
   width: 100%;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-row: auto auto;
+  grid-template-columns: repeat(2, 50%);
+  grid-template-rows: repeat(2, 50%);
 }
 
 .loading {
@@ -13,6 +14,13 @@
   display: flex;
   justify-content: center;
   align-items: center;
+}
+
+@media (max-width: 1000px) {
+  .main {
+    grid-template-columns: repeat(1, 100%);
+    grid-template-rows: repeat(4, 50%);
+  }
 }
 
 .lds-ripple {
