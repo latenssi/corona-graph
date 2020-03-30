@@ -1,29 +1,12 @@
-import dateformat from "dateformat";
+import eachDayOfInterval from "date-fns/eachDayOfInterval";
+import format from "date-fns/format";
+import addDays from "date-fns/addDays";
+
 import { gaussianPDF } from "../utils/gaussian";
 
 const cutOffDate = "2020-02-23";
 
-const predictedDays = 40;
-
-const model1 = {
-  peakDate: "2020-04-30",
-  incubationTime: 20,
-  deathRate: 0.02,
-  hospitalisationRate: 0.1,
-  intensiveCareRate: 0.1 * 0.29,
-  variance: 350, // Gaussian
-  scale: 20000 // Gaussian
-};
-
-const model2 = {
-  peakDate: "2020-04-30",
-  incubationTime: 20,
-  deathRate: 0.02,
-  hospitalisationRate: 0.1,
-  intensiveCareRate: 0.1 * 0.29,
-  variance: 280, // Gaussian
-  scale: 30000 // Gaussian
-};
+const predictedDays = 50;
 
 const model3 = {
   peakDate: "2020-04-30",
@@ -37,20 +20,8 @@ const model3 = {
 
 export const activeModel = model3;
 
-Date.prototype.addDays = function(days) {
-  const date = new Date(this.valueOf());
-  date.setDate(date.getDate() + days);
-  return date;
-};
-
-function getDatesBetween(startDate, stopDate) {
-  const dateArray = new Array();
-  let currentDate = startDate;
-  while (currentDate <= stopDate) {
-    dateArray.push(new Date(currentDate));
-    currentDate = currentDate.addDays(1);
-  }
-  return dateArray;
+function formatDate(date) {
+  return format(date, "yyyy-MM-dd");
 }
 
 function filterOldDates(data) {
@@ -58,52 +29,70 @@ function filterOldDates(data) {
 }
 
 function addMissingDates(origData) {
-  const data = origData.slice();
+  const data = origData.slice(); // Make a copy
 
-  const firstDate = new Date(data[0].date);
-  const lastDate = new Date(data[data.length - 1].date);
-
-  getDatesBetween(firstDate, lastDate).forEach((date, i) => {
-    const dateStr = dateformat(date, "yyyy-mm-dd");
-    if (data[i] && data[i].date !== dateStr) {
-      data.splice(i, 0, { date: dateStr });
-    }
-  });
+  eachDayOfInterval({
+    start: new Date(data[0].date),
+    end: new Date(data[data.length - 1].date)
+  })
+    .map(formatDate)
+    .forEach((date, i) => {
+      if (data[i] && data[i].date !== date) {
+        data.splice(i, 0, { date });
+      }
+    });
 
   return data;
 }
 
 function addPredictedDates(origData) {
-  const data = origData.slice();
+  if (predictedDays <= 0) return origData;
+
+  const data = origData.slice(); // Make a copy
 
   const lastDate = new Date(data[data.length - 1].date);
-  const firstFuture = lastDate.addDays(1);
-  const lastFuture = lastDate.addDays(predictedDays);
 
-  getDatesBetween(firstFuture, lastFuture).forEach((date, i) => {
-    data.push({ date: dateformat(date, "yyyy-mm-dd"), prediction: true });
-  });
+  eachDayOfInterval({
+    start: addDays(lastDate, 1),
+    end: addDays(lastDate, predictedDays)
+  })
+    .map(formatDate)
+    .forEach(date => {
+      data.push({ date, prediction: true });
+    });
 
   return data;
 }
 
 function addPredictedConfirmed(data) {
-  const mean = data.findIndex(d => d.date === activeModel.peakDate);
+  // Make sure we get an index so the calculation work even when peakDate is not
+  // in our data
+  const mean = eachDayOfInterval({
+    start: new Date(data[0].date),
+    end: new Date(activeModel.peakDate)
+  })
+    .map(formatDate)
+    .findIndex(date => date === activeModel.peakDate);
 
   return data.map((d, i) => {
-    const confirmed_gaus = Math.round(
-      gaussianPDF(mean, activeModel.variance, i, activeModel.maxConfirmed)
+    const confirmed_model = gaussianPDF(
+      mean,
+      activeModel.variance,
+      i,
+      activeModel.maxConfirmed
     );
     return {
       ...d,
-      confirmed: d.prediction ? confirmed_gaus : d.confirmed,
-      confirmed_gaus
+      confirmed: d.prediction ? Math.round(confirmed_model) : d.confirmed,
+      confirmed_model
     };
   });
 }
 
 function addPredictedOther(data) {
   return data.map((d, i) => {
+    if (!d.prediction) return d;
+
     const { confirmed: incubatedCases } = data[
       i - activeModel.incubationTime
     ] || {
@@ -131,14 +120,13 @@ function addCumulative(data) {
   let recovered_cum = 0;
   let deaths_cum = 0;
   let active = 0;
-  return data.map(({ date, ...datums }) => {
-    confirmed_cum += datums["confirmed"] || 0;
-    recovered_cum += datums["recovered"] || 0;
-    deaths_cum += datums["deaths"] || 0;
+  return data.map(d => {
+    confirmed_cum += d["confirmed"] || 0;
+    recovered_cum += d["recovered"] || 0;
+    deaths_cum += d["deaths"] || 0;
     active = confirmed_cum - recovered_cum - deaths_cum;
     return {
-      date,
-      ...datums,
+      ...d,
       confirmed_cum,
       recovered_cum,
       deaths_cum,
@@ -171,7 +159,7 @@ function massageData(data) {
 }
 
 function getPredictionBoundary(data) {
-  return dateformat(new Date(data[data.length - 1].date), "yyyy-mm-dd");
+  return formatDate(new Date(data[data.length - 1].date));
 }
 
 export { massageData, getPredictionBoundary };

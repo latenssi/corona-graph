@@ -1,18 +1,8 @@
 import React from "react";
-import {
-  ResponsiveContainer,
-  ComposedChart,
-  Label,
-  Line,
-  Area,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ReferenceLine
-} from "recharts";
+import { Label, Line, Area, Bar, ReferenceLine } from "recharts";
+
+import Loading from "../components/Loading";
+import Chart from "../components/Chart";
 
 import { activeModel } from "../utils/data";
 import { useMassagedData } from "../utils/hooks";
@@ -32,18 +22,12 @@ function Index() {
     if (dataState.data && dataState.data.length) setLoading(false);
   }, [dataState.data]);
 
-  const {
-    data,
-    meta: { predictionBoundary = "" }
-  } = dataState;
+  const { data, meta } = dataState;
 
   if (loading)
     return (
       <div className={styles.loading}>
-        <div className={styles["lds-ripple"]}>
-          <div></div>
-          <div></div>
-        </div>
+        <Loading />
       </div>
     );
 
@@ -51,15 +35,19 @@ function Index() {
     <div className={styles.main}>
       {data ? (
         <React.Fragment>
-          <Chart data={data} predictionBoundary={predictionBoundary}>
-            {/* <Line
+          <Chart
+            data={data}
+            activeModel={activeModel}
+            predictionBoundary={meta.predictionBoundary}
+          >
+            <Line
               type="monotone"
-              dataKey="confirmed_gaus"
+              dataKey="confirmed_model"
               stroke="#0094cf"
-              name="Uusia tapauksia (gaussian)"
+              name="Uusia tapauksia (malli)"
               strokeWidth={2}
               dot={false}
-            /> */}
+            />
             <Area
               type="monotone"
               dataKey="confirmed_cum"
@@ -69,7 +57,11 @@ function Index() {
             />
             <Bar dataKey="confirmed" fill="#3f2eff" name="Uusia tapauksia" />
           </Chart>
-          <Chart data={data} predictionBoundary={predictionBoundary}>
+          <Chart
+            data={data}
+            activeModel={activeModel}
+            predictionBoundary={meta.predictionBoundary}
+          >
             <ReferenceLine y={600} stroke="#ff8080" strokeWidth={4}>
               <Label
                 value="Tehohoidon kapasiteetti"
@@ -102,7 +94,11 @@ function Index() {
               dot={false}
             />
           </Chart>
-          <Chart data={data} predictionBoundary={predictionBoundary}>
+          <Chart
+            data={data}
+            activeModel={activeModel}
+            predictionBoundary={meta.predictionBoundary}
+          >
             <Area
               type="monotone"
               dataKey="recovered_cum"
@@ -112,7 +108,11 @@ function Index() {
             />
             <Bar dataKey="recovered" fill="#00c721" name="Parantuneet" />
           </Chart>
-          <Chart data={data} predictionBoundary={predictionBoundary}>
+          <Chart
+            data={data}
+            activeModel={activeModel}
+            predictionBoundary={meta.predictionBoundary}
+          >
             <Area
               type="monotone"
               dataKey="deaths_cum"
@@ -129,38 +129,3 @@ function Index() {
 }
 
 export default Index;
-
-function Chart({
-  data,
-  children,
-  predictionBoundary,
-  yAxisScale = "log",
-  yAxisDomain = [1, dataMax => dataMax * 1.2]
-}) {
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart
-        data={data}
-        margin={{ top: 20, right: 20, left: 0, bottom: 60 }}
-        syncId="grid-1"
-      >
-        <CartesianGrid opacity={0.5} />
-        <XAxis dataKey="date" angle={-45} textAnchor="end" />
-        <YAxis scale={yAxisScale} domain={yAxisDomain} allowDataOverflow />
-        <Tooltip isAnimationActive={false} />
-        <Legend verticalAlign="top" />
-        <ReferenceLine x={predictionBoundary} stroke="#e7f5d0" strokeWidth={8}>
-          <Label value="Ennuste" offset={10} position="insideTopLeft" />
-        </ReferenceLine>
-        <ReferenceLine
-          x={activeModel.peakDate}
-          stroke="#b0deff"
-          strokeWidth={8}
-        >
-          <Label value="Taittuma" offset={10} position="insideTopRight" />
-        </ReferenceLine>
-        {children}
-      </ComposedChart>
-    </ResponsiveContainer>
-  );
-}
