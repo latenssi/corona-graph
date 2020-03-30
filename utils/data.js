@@ -1,4 +1,41 @@
 import dateformat from "dateformat";
+import { gaussianPDF } from "../utils/gaussian";
+
+const cutOffDate = "2020-02-23";
+
+const predictedDays = 40;
+
+const model1 = {
+  peakDate: "2020-04-30",
+  incubationTime: 20,
+  deathRate: 0.02,
+  hospitalisationRate: 0.1,
+  intensiveCareRate: 0.1 * 0.29,
+  variance: 350, // Gaussian
+  scale: 20000 // Gaussian
+};
+
+const model2 = {
+  peakDate: "2020-04-30",
+  incubationTime: 20,
+  deathRate: 0.02,
+  hospitalisationRate: 0.1,
+  intensiveCareRate: 0.1 * 0.29,
+  variance: 280, // Gaussian
+  scale: 30000 // Gaussian
+};
+
+const model3 = {
+  peakDate: "2020-04-30",
+  incubationTime: 20,
+  deathRate: 0.02,
+  hospitalisationRate: 0.1,
+  intensiveCareRate: 0.1 * 0.29,
+  maxConfirmed: 800,
+  variance: 280 // For the curve - not really variance
+};
+
+export const activeModel = model3;
 
 Date.prototype.addDays = function(days) {
   const date = new Date(this.valueOf());
@@ -17,24 +54,7 @@ function getDatesBetween(startDate, stopDate) {
 }
 
 function filterOldDates(data) {
-  return data.filter(d => d.date > "2020-02-22");
-}
-
-function predict(history, constants) {
-  const actualSpreadrate =
-    constants.spreadRate -
-    (constants.spreadRate - 1) * constants.measuresEffectiveness;
-
-  const incubatedCases =
-    history[history.length - constants.incubationTime].confirmed || 0;
-
-  const lastConfirmed = history[history.length - 1].confirmed || 0;
-
-  return {
-    confirmed: Math.round(lastConfirmed * actualSpreadrate),
-    recovered: Math.round(incubatedCases * (1 - constants.deathRate)),
-    deaths: Math.round(incubatedCases * constants.deathRate)
-  };
+  return data.filter(d => d.date >= cutOffDate);
 }
 
 function addMissingDates(origData) {
@@ -53,22 +73,60 @@ function addMissingDates(origData) {
   return data;
 }
 
-function addPredictionDates(origData, constants) {
+function addPredictedDates(origData) {
   const data = origData.slice();
 
   const lastDate = new Date(data[data.length - 1].date);
   const firstFuture = lastDate.addDays(1);
-  const lastFuture = lastDate.addDays(constants.predictedDays);
+  const lastFuture = lastDate.addDays(predictedDays);
 
   getDatesBetween(firstFuture, lastFuture).forEach((date, i) => {
-    const dateStr = dateformat(date, "yyyy-mm-dd");
-    data.push({ date: dateStr, ...predict(data, constants) });
+    data.push({ date: dateformat(date, "yyyy-mm-dd"), prediction: true });
   });
 
   return data;
 }
 
-function addCumul(data) {
+function addPredictedConfirmed(data) {
+  const mean = data.findIndex(d => d.date === activeModel.peakDate);
+
+  return data.map((d, i) => {
+    const confirmed_gaus = Math.round(
+      gaussianPDF(mean, activeModel.variance, i, activeModel.maxConfirmed)
+    );
+    return {
+      ...d,
+      confirmed: d.prediction ? confirmed_gaus : d.confirmed,
+      confirmed_gaus
+    };
+  });
+}
+
+function addPredictedOther(data) {
+  return data.map((d, i) => {
+    const { confirmed: incubatedCases } = data[
+      i - activeModel.incubationTime
+    ] || {
+      confirmed: 0
+    };
+
+    const recovered = d.prediction
+      ? Math.round(incubatedCases * (1 - activeModel.deathRate))
+      : d.recovered;
+
+    const deaths = d.prediction
+      ? Math.round(incubatedCases * activeModel.deathRate)
+      : d.deaths;
+
+    return {
+      ...d,
+      recovered,
+      deaths
+    };
+  });
+}
+
+function addCumulative(data) {
   let confirmed_cum = 0;
   let recovered_cum = 0;
   let deaths_cum = 0;
@@ -89,21 +147,27 @@ function addCumul(data) {
   });
 }
 
-function addHosptilazed(data, constants) {
+function addHospitalised(data) {
   return data.map(d => ({
     ...d,
-    hospitalized: Math.round(d.active * constants.hospitalizationRate),
-    icu: Math.round(d.active * constants.intensiveCareRate)
+    hospitalised: Math.round(d.active * activeModel.hospitalisationRate),
+    icu: Math.round(d.active * activeModel.intensiveCareRate)
   }));
 }
 
-function massageData(data, constants) {
-  return addHosptilazed(
-    filterOldDates(
-      addCumul(addPredictionDates(addMissingDates(data), constants))
+function massageData(data) {
+  return {
+    data: filterOldDates(
+      addHospitalised(
+        addCumulative(
+          addPredictedOther(
+            addPredictedConfirmed(addPredictedDates(addMissingDates(data)))
+          )
+        )
+      )
     ),
-    constants
-  );
+    meta: { predictionBoundary: getPredictionBoundary(data) }
+  };
 }
 
 function getPredictionBoundary(data) {

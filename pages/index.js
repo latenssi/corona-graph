@@ -2,7 +2,7 @@ import React from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
-  LineChart,
+  Label,
   Line,
   Area,
   Bar,
@@ -14,7 +14,8 @@ import {
   ReferenceLine
 } from "recharts";
 
-import { massageData, getPredictionBoundary } from "../utils/data";
+import { activeModel } from "../utils/data";
+import { useMassagedData } from "../utils/hooks";
 
 import styles from "./Index.module.css";
 
@@ -24,65 +25,81 @@ const DATA_URL =
     : "https://corona-adapter.herokuapp.com/FI/grouped.json";
 
 function Index() {
-  const [data, setData] = React.useState([]);
-  const [predictionBoundary, setPredictionBoundary] = React.useState("");
-
-  const [constants, setConstants] = React.useState({
-    predictedDays: 14,
-    deathRate: 0.02,
-    hospitalizationRate: 0.1,
-    intensiveCareRate: 0.1 * 0.29,
-    incubationTime: 20,
-    spreadRate: 1.35,
-    measuresEffectiveness: 0.7
-  });
+  const [loading, setLoading] = React.useState(true);
+  const dataState = useMassagedData(DATA_URL);
 
   React.useEffect(() => {
-    fetch(DATA_URL)
-      .then(r => r.json())
-      .then(d => {
-        setData(massageData(d, constants));
-        setPredictionBoundary(getPredictionBoundary(d));
-      });
-  }, []);
+    if (dataState.data && dataState.data.length) setLoading(false);
+  }, [dataState.data]);
+
+  const {
+    data,
+    meta: { predictionBoundary = "" }
+  } = dataState;
+
+  if (loading)
+    return (
+      <div className={styles.loading}>
+        <div className={styles["lds-ripple"]}>
+          <div></div>
+          <div></div>
+        </div>
+      </div>
+    );
 
   return (
     <div className={styles.main}>
       {data ? (
         <React.Fragment>
           <Chart data={data} predictionBoundary={predictionBoundary}>
+            {/* <Line
+              type="monotone"
+              dataKey="confirmed_gaus"
+              stroke="#0094cf"
+              name="Uusia tapauksia (gaussian)"
+              strokeWidth={2}
+              dot={false}
+            /> */}
             <Area
               type="monotone"
               dataKey="confirmed_cum"
               fill="#b6b0ff"
               stroke="#3f2eff"
-              name="Kumul. varmistuneet"
+              name="Kumul. tapauksia"
             />
-            <Bar dataKey="confirmed" fill="#3f2eff" name="Varmistuneet" />
+            <Bar dataKey="confirmed" fill="#3f2eff" name="Uusi tapauksia" />
           </Chart>
           <Chart data={data} predictionBoundary={predictionBoundary}>
-            <Line
+            <ReferenceLine y={600} stroke="#ff8080" strokeWidth={4}>
+              <Label
+                value="Tehohoidon kapasiteetti"
+                offset={8}
+                position="insideTopLeft"
+              />
+            </ReferenceLine>
+            <Area
               type="monotone"
               dataKey="active"
               stroke="#ff8400"
-              name="Aktiivisia (lask.)"
+              fill="#ffead4"
+              name="Aktiivisia"
+              dot={false}
             />
-            <Line
+            <Area
               type="monotone"
-              dataKey="hospitalized"
+              dataKey="hospitalised"
               stroke="#df34eb"
-              name="Sairaalahoidossa (lask.)"
+              fill="#e4cae6"
+              name="Sairaalahoidossa"
+              dot={false}
             />
-            <Line
+            <Area
               type="monotone"
               dataKey="icu"
               stroke="#eb3449"
-              name="Tehohoidossa (lask.)"
-            />
-            <ReferenceLine
-              y={600}
-              stroke="red"
-              label="Tehohoidon kapasiteetti"
+              fill="#e8a9b1"
+              name="Tehohoidossa"
+              dot={false}
             />
           </Chart>
           <Chart data={data} predictionBoundary={predictionBoundary}>
@@ -113,7 +130,13 @@ function Index() {
 
 export default Index;
 
-function Chart({ data, children, predictionBoundary }) {
+function Chart({
+  data,
+  children,
+  predictionBoundary,
+  yAxisScale = "log",
+  yAxisDomain = [1, dataMax => dataMax * 1.2]
+}) {
   return (
     <ResponsiveContainer width="100%" height="100%">
       <ComposedChart
@@ -123,15 +146,20 @@ function Chart({ data, children, predictionBoundary }) {
       >
         <CartesianGrid opacity={0.5} />
         <XAxis dataKey="date" angle={-45} textAnchor="end" />
-        <YAxis
-          scale="log"
-          domain={[1, dataMax => dataMax * 1.2]}
-          allowDataOverflow
-        />
+        <YAxis scale={yAxisScale} domain={yAxisDomain} allowDataOverflow />
         <Tooltip isAnimationActive={false} />
         <Legend verticalAlign="top" />
+        <ReferenceLine x={predictionBoundary} stroke="#e7f5d0" strokeWidth={8}>
+          <Label value="Ennuste" offset={10} position="insideTopLeft" />
+        </ReferenceLine>
+        <ReferenceLine
+          x={activeModel.peakDate}
+          stroke="#b0deff"
+          strokeWidth={8}
+        >
+          <Label value="Taittuma" offset={10} position="insideTopRight" />
+        </ReferenceLine>
         {children}
-        <ReferenceLine x={predictionBoundary} stroke="green" />
       </ComposedChart>
     </ResponsiveContainer>
   );

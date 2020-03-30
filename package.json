@@ -12,10 +12,14 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@zeit/next-workers": "^1.0.0",
     "dateformat": "^3.0.3",
+    "es6-promise": "^4.2.8",
+    "isomorphic-fetch": "^2.2.1",
     "next": "^9.3.2",
     "react": "^16.13.1",
     "react-dom": "^16.13.1",
-    "recharts": "^1.8.5"
+    "recharts": "^1.8.5",
+    "worker-loader": "^2.0.0"
   }
 }
