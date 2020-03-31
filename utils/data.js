@@ -2,11 +2,12 @@ import eachDayOfInterval from "date-fns/eachDayOfInterval";
 import format from "date-fns/format";
 import addDays from "date-fns/addDays";
 
-import { gaussianPDF } from "../utils/gaussian";
+import { adjNormDist } from "../utils/gaussian";
 
 const cutOffDate = "2020-02-23";
+const population = 5.513e6;
 
-const predictedDays = 50;
+const predictedDays = 90;
 
 const model3 = {
   peakDate: "2020-04-30",
@@ -18,7 +19,17 @@ const model3 = {
   variance: 280 // For the curve - not really variance
 };
 
-export const activeModel = model3;
+const model4 = {
+  peakDate: "2020-06-18",
+  incubationTime: 20,
+  deathRate: 0.01,
+  hospitalisationRate: 0.1,
+  intensiveCareRate: 0.1 * 0.29,
+  maxConfirmed: 8000,
+  totalInfected: 0.1 // of the population
+};
+
+export const activeModel = model4;
 
 function formatDate(date) {
   return format(date, "yyyy-MM-dd");
@@ -67,6 +78,7 @@ function addPredictedDates(origData) {
 function addPredictedConfirmed(data) {
   // Make sure we get an index so the calculation work even when peakDate is not
   // in our data
+
   const mean = eachDayOfInterval({
     start: new Date(data[0].date),
     end: new Date(activeModel.peakDate)
@@ -74,13 +86,14 @@ function addPredictedConfirmed(data) {
     .map(formatDate)
     .findIndex(date => date === activeModel.peakDate);
 
+  const modelFunc = adjNormDist(
+    mean,
+    activeModel.totalInfected * population,
+    activeModel.maxConfirmed
+  );
+
   return data.map((d, i) => {
-    const confirmed_model = gaussianPDF(
-      mean,
-      activeModel.variance,
-      i,
-      activeModel.maxConfirmed
-    );
+    const confirmed_model = modelFunc(i);
     return {
       ...d,
       confirmed: d.prediction ? Math.round(confirmed_model) : d.confirmed,
