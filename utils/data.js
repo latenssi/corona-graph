@@ -16,7 +16,7 @@ const model3 = {
   hospitalisationRate: 0.1,
   intensiveCareRate: 0.1 * 0.29,
   maxConfirmed: 800,
-  variance: 280 // For the curve - not really variance
+  variance: 280, // For the curve - not really variance
 };
 
 const model4 = {
@@ -26,7 +26,7 @@ const model4 = {
   hospitalisationRate: 0.1,
   intensiveCareRate: 0.1 * 0.29,
   maxConfirmed: 8000,
-  totalInfected: 0.1 // of the population
+  totalInfected: 0.1, // of the population
 };
 
 export const activeModel = model4;
@@ -36,7 +36,7 @@ function formatDate(date) {
 }
 
 function filterOldDates(data) {
-  return data.filter(d => d.date >= cutOffDate);
+  return data.filter((d) => d.date >= cutOffDate);
 }
 
 function addMissingDates(origData) {
@@ -44,7 +44,7 @@ function addMissingDates(origData) {
 
   eachDayOfInterval({
     start: new Date(data[0].date),
-    end: new Date(data[data.length - 1].date)
+    end: new Date(data[data.length - 1].date),
   })
     .map(formatDate)
     .forEach((date, i) => {
@@ -65,10 +65,10 @@ function addPredictedDates(origData) {
 
   eachDayOfInterval({
     start: addDays(lastDate, 1),
-    end: addDays(lastDate, predictedDays)
+    end: addDays(lastDate, predictedDays),
   })
     .map(formatDate)
-    .forEach(date => {
+    .forEach((date) => {
       data.push({ date, prediction: true });
     });
 
@@ -81,10 +81,10 @@ function addPredictedConfirmed(data) {
 
   const mean = eachDayOfInterval({
     start: new Date(data[0].date),
-    end: new Date(activeModel.peakDate)
+    end: new Date(activeModel.peakDate),
   })
     .map(formatDate)
-    .findIndex(date => date === activeModel.peakDate);
+    .findIndex((date) => date === activeModel.peakDate);
 
   const modelFunc = adjNormDist(
     mean,
@@ -97,7 +97,7 @@ function addPredictedConfirmed(data) {
     return {
       ...d,
       confirmed: d.prediction ? Math.round(confirmed_model) : d.confirmed,
-      confirmed_model
+      confirmed_model,
     };
   });
 }
@@ -109,7 +109,7 @@ function addPredictedOther(data) {
     const { confirmed: incubatedCases } = data[
       i - activeModel.incubationTime
     ] || {
-      confirmed: 0
+      confirmed: 0,
     };
 
     const deaths = d.prediction
@@ -121,7 +121,7 @@ function addPredictedOther(data) {
     return {
       ...d,
       recovered,
-      deaths
+      deaths,
     };
   });
 }
@@ -131,7 +131,7 @@ function addCumulative(data) {
   let recovered_cum = 0;
   let deaths_cum = 0;
   let active = 0;
-  return data.map(d => {
+  return data.map((d) => {
     confirmed_cum += d["confirmed"] || 0;
     recovered_cum += d["recovered"] || 0;
     deaths_cum += d["deaths"] || 0;
@@ -141,31 +141,35 @@ function addCumulative(data) {
       confirmed_cum,
       recovered_cum,
       deaths_cum,
-      active
+      active,
     };
   });
 }
 
 function addHospitalised(data) {
-  return data.map(d => ({
+  return data.map((d) => ({
     ...d,
     hospitalised: Math.round(d.active * activeModel.hospitalisationRate),
-    icu: Math.round(d.active * activeModel.intensiveCareRate)
+    icu: Math.round(d.active * activeModel.intensiveCareRate),
   }));
 }
 
-function massageData(data) {
+function massageData(origData, options = { usePrediction: false }) {
+  let data = addMissingDates(origData);
+  data = options.usePrediction ? addPredictedDates(data) : data;
+  data = options.usePrediction ? addPredictedConfirmed(data) : data;
+  data = options.usePrediction ? addPredictedOther(data) : data;
+  data = addCumulative(data);
+  data = addHospitalised(data);
+  data = filterOldDates(data);
+
   return {
-    data: filterOldDates(
-      addHospitalised(
-        addCumulative(
-          addPredictedOther(
-            addPredictedConfirmed(addPredictedDates(addMissingDates(data)))
-          )
-        )
-      )
-    ),
-    meta: { predictionBoundary: getPredictionBoundary(data) }
+    data,
+    meta: {
+      predictionBoundary: options.usePrediction
+        ? getPredictionBoundary(origData)
+        : null,
+    },
   };
 }
 

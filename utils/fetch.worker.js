@@ -1,10 +1,21 @@
 require("es6-promise").polyfill();
 require("isomorphic-fetch");
 
-onmessage = function({ data }) {
+let fetching = false;
+
+onmessage = function ({ data }) {
   if (data.uri) {
-    fetch(data.uri)
-      .then(response => response.json())
-      .then(data => postMessage({ result: data }));
+    if (!fetching) {
+      fetching = true;
+      fetch(data.uri)
+        .then((response) => response.json())
+        .then((data) => {
+          fetching = false;
+          postMessage({ result: data });
+        })
+        .catch(() => {
+          fetching = false;
+        });
+    }
   }
 };

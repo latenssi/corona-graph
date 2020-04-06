@@ -1,0 +1,36 @@
+.sidebar {
+  display: flex;
+  justify-content: center;
+  position: relative;
+  height: 100%;
+  width: 0;
+  margin-right: -2rem;
+  padding-right: 2rem;
+  z-index: 1;
+}
+
+.sidebar.open {
+  width: 10rem;
+}
+
+.toggle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 2rem;
+  height: 2rem;
+  position: absolute;
+  top: 0;
+  right: 0;
+  cursor: pointer;
+}
+
+.toggle:hover {
+  background-color: rgb(226, 226, 226);
+}
+
+.content {
+  display: flex;
+  justify-content: center;
+  padding-top: 4rem;
+}
