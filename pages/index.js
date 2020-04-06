@@ -57,15 +57,17 @@ function Index() {
               data={data}
               options={{ usePrediction, predictionBoundary, activeModel }}
             >
-              <Line
-                isAnimationActive={false}
-                type="monotone"
-                dataKey="confirmed_model"
-                stroke="#0094cf"
-                name="Uusia tapauksia (malli)"
-                strokeWidth={2}
-                dot={false}
-              />
+              {usePrediction ? (
+                <Line
+                  isAnimationActive={false}
+                  type="monotone"
+                  dataKey="confirmed_model"
+                  stroke="#0094cf"
+                  name="Uusia tapauksia (malli)"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              ) : null}
               <Area
                 isAnimationActive={false}
                 type="monotone"
