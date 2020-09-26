@@ -32,7 +32,8 @@ export function useData(dataURI) {
   return data;
 }
 
-export function useMassagedData(dataURI, { usePrediction = false }) {
+export function useMassagedData(dataURI, options = { usePrediction: false }) {
+  const { usePrediction } = options;
   const [state, setState] = React.useState({ data: [], meta: {} });
   const rawData = useData(dataURI);
   const sendToWorker = useWorker(DataWorker, setState);

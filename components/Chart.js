@@ -3,7 +3,6 @@ import {
   ResponsiveContainer,
   ComposedChart,
   Label,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -12,7 +11,7 @@ import {
   ReferenceLine,
 } from "recharts";
 
-export default function Chart({ children, data, options }) {
+export default function Chart({ children, data, options = {} }) {
   const {
     activeModel,
     usePrediction,
